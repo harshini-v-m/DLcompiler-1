@@ -9,23 +9,19 @@ include "NovaDialect.td"
 def Nova_ElementType : AnyTypeOf<[I1, I8, I16, I32, I64, F16, BF16, F32, F64, Complex<F32>, Complex<F64>]>;
 def Nova_Tensor : TensorOf<[Nova_ElementType]>;
 
-def Nova_AddOp : Op<Nova_Dialect, "add", [Pure, InferTypeOpInterface, Commutative,
-  NoMemoryEffect, SameOperandsAndResultElementType]> {
-  let summary = "Elementwise tensor addition";
-  let description = [{
-    Adds two tensors elementwise. Result type is automatically inferred.
-    
-    Example:
-      %r = nova.add %a, %b : tensor<2x2xf32>, tensor<2x2xf32>
-  }];
+//------------------base class for binary--------------------------
+// Base class for all binary elementwise tensor ops.
+class Nova_BinaryOp<string mnemonic, list<Trait> extraTraits = []>
+    : Op<Nova_Dialect, mnemonic,
+         !listconcat(extraTraits, [Pure, InferTypeOpInterface,
+                                   NoMemoryEffect,
+                                   SameOperandsAndResultElementType])> {
 
   let arguments = (ins Nova_Tensor:$lhs, Nova_Tensor:$rhs);
-  let results = (outs Nova_Tensor:$result);
-  
-  // Fix the assembly format
-  let assemblyFormat = "$lhs `,` $rhs attr-dict `:` type($lhs) `,` type($rhs)";
+  let results   = (outs Nova_Tensor:$result);
 
-  //let hasVerifier = 1;
+  let assemblyFormat =
+    "$lhs `,` $rhs attr-dict `:` type($lhs) `,` type($rhs)";
 
   let extraClassDeclaration = [{
     static ::mlir::LogicalResult inferReturnTypes(
@@ -40,23 +36,49 @@ def Nova_AddOp : Op<Nova_Dialect, "add", [Pure, InferTypeOpInterface, Commutativ
 }
 
 
+
+//----------------------add---------------------------------------
+def Nova_AddOp : Nova_BinaryOp<"add", [Commutative]> {
+  let summary = "Elementwise tensor addition";
+  let description = [{
+    Adds two tensors elementwise. Result type is automatically inferred.
+
+    Example:
+      %r = nova.add %a, %b : tensor<2x2xf32>, tensor<2x2xf32>
+  }];
+}
+
+//-------------------------------subtract-------------------
+def Nova_SubOp : Nova_BinaryOp<"sub"> {
+  let summary = "Elementwise tensor subtraction";
+  let description = [{
+    Subtracts two tensors elementwise. Result type is automatically inferred.
+
+    Example:
+      %r = nova.sub %a, %b : tensor<2x2xf32>, tensor<2x2xf32>
+  }];
+}
+
 //-------------------------------base class for unary------------------------
-class Nova_UnaryOp<string mnemonic, list<Trait> traits = [],
-                   TypeConstraint typeConstraint = Nova_Tensor> :
-    Op<Nova_Dialect, mnemonic, traits> {
+class Nova_UnaryOp<string mnemonic, list<Trait> extraTraits = []>
+    : Op<Nova_Dialect, mnemonic,
+         !listconcat(extraTraits, [Pure, InferTypeOpInterface,
+                                   NoMemoryEffect,
+                                   SameOperandsAndResultElementType])> {
   
   let arguments = (ins Nova_Tensor:$operand);
   let results = (outs Nova_Tensor:$result);
   
-  let assemblyFormat = "$operand attr-dict `:` type($operand) `->` type($result)";
-}
-// ----------------sqrt -----------------------------
-def Nova_SqrtOp : Nova_UnaryOp<"sqrt"> {
-  let summary = "Square root operation";
-  let description = [{
-    Performs element-wise square root of `operand` tensor.
-    Example:
-    %result = nova.sqrt%operand : tensor<5xf32>
+  let assemblyFormat = "$operand attr-dict `:` type($operand) ";
+  let extraClassDeclaration = [{
+    static ::mlir::LogicalResult inferReturnTypes(
+      ::mlir::MLIRContext *context,
+      std::optional<::mlir::Location> loc,
+      ::mlir::ValueRange operands,
+      ::mlir::DictionaryAttr attributes,
+      ::mlir::OpaqueProperties properties,
+      ::mlir::RegionRange regions,
+      ::llvm::SmallVectorImpl<::mlir::Type> &inferredReturnTypes);
   }];
 }
 // ----------------neg-----------------------------
@@ -69,6 +91,17 @@ def Nova_NegOp : Nova_UnaryOp<"neg"> {
       %r = nova.neg %a : tensor<2x3xf32>
   }];
 }
+/*// ----------------sqrt -----------------------------
+def Nova_SqrtOp : Nova_UnaryOp<"sqrt"> {
+  let summary = "Square root operation";
+  let description = [{
+    Performs element-wise square root of `operand` tensor.
+    Example:
+    %result = nova.sqrt%operand : tensor<5xf32>
+  }];
+}
+
+
 //---------------------abs----------------------
 def Nova_AbsOp : Nova_UnaryOp<"abs"> {
   let summary = "Elementwise absolute value";
@@ -139,7 +172,7 @@ def Nova_FloorOp: Nova_UnaryOp<"floor">{
   }];
 }
 
-
+*/
 
 
 //-----------------------------------------------------
